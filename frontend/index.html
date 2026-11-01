@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis | Local assistant</title>
+  <meta name="description" content="Jarvis is a private assistant that runs a language model entirely on this computer, with no internet connection required.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#152230">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23F0B44C' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <button type="button" id="sidebar-toggle" class="icon-btn" aria-label="Toggle conversations sidebar" aria-expanded="false">
+        <span aria-hidden="true">☰</span>
+      </button>
+      <h1 class="wordmark">Jarvis</h1>
+      <span class="conv-header-title" id="active-conv-title" title="Current conversation">New conversation</span>
+      <button type="button" id="rename-conv-btn" class="chip-btn" hidden>Rename</button>
+    </div>
+
+    <nav class="topbar-right" aria-label="Workspace controls">
+      <button type="button" id="network-mode-indicator" class="pill-indicator" data-online="false" title="Click to toggle Offline / Online web research mode">
+        <span class="pill-dot" aria-hidden="true"></span>
+        <span id="network-mode-text">Offline</span>
+      </button>
+      <button type="button" id="memory-indicator" class="pill-indicator" data-enabled="true" title="Click to manage saved memories">
+        <span class="pill-dot" aria-hidden="true"></span>
+        <span id="memory-indicator-text">Memory: On</span>
+      </button>
+      <button type="button" id="wake-word-indicator" class="pill-indicator" data-enabled="false" title="Click to toggle local 'Hey Jarvis' wake-word detection">
+        <span class="pill-dot" aria-hidden="true"></span>
+        <span id="wake-word-indicator-text">Wake: Off</span>
+      </button>
+      <div class="voice-state-pill" id="voice-state-pill" data-voice-state="Idle" title="Current local voice pipeline state">
+        <span class="voice-state-dot" aria-hidden="true"></span>
+        <span id="voice-state-text">Voice: Idle</span>
+        <button type="button" id="topbar-stop-speaking-btn" class="mini-btn mini-btn-danger" hidden>Stop speaking</button>
+      </div>
+      <button type="button" id="open-tasks-btn" class="chip-btn">
+        Tasks <span class="badge" id="active-tasks-badge">0</span>
+      </button>
+      <button type="button" id="open-notifications-btn" class="chip-btn">
+        Alerts <span class="badge badge-warn" id="unread-notifications-badge" hidden>0</span>
+      </button>
+      <button type="button" id="open-tools-btn" class="chip-btn">
+        Tools <span class="badge badge-warn" id="pending-approvals-badge" hidden>0</span>
+      </button>
+      <button type="button" id="open-memories-btn" class="chip-btn">
+        Memories <span class="badge" id="memory-count-badge">0</span>
+      </button>
+      <button type="button" id="open-settings-btn" class="chip-btn">
+        Settings <span class="badge badge-warn" id="settings-reload-badge" hidden title="Saved model settings awaiting reload">!</span>
+      </button>
+      <div class="status" id="status" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-text" id="status-text">Connecting to the server…</span>
+      </div>
+    </nav>
+  </header>
+
+  <div class="workspace">
+    <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+    <aside class="sidebar" id="sidebar" aria-label="Conversation history">
+      <div class="sidebar-header">
+        <button type="button" id="new-chat-sidebar" class="btn btn-primary btn-block">+ New chat</button>
+        <div class="search-box">
+          <label class="visually-hidden" for="search-input">Search conversations</label>
+          <input type="search" id="search-input" placeholder="Search titles &amp; messages…" maxlength="200" autocomplete="off">
+        </div>
+        <div class="sidebar-tabs" role="tablist" aria-label="Conversation filter">
+          <button type="button" id="tab-active" class="tab-btn active" role="tab" aria-selected="true">Active</button>
+          <button type="button" id="tab-archived" class="tab-btn" role="tab" aria-selected="false">Archived</button>
+        </div>
+      </div>
+
+      <ol class="conv-list" id="conversation-list" aria-label="Saved conversations"></ol>
+      <p class="sidebar-empty" id="sidebar-empty" hidden>No conversations yet.</p>
+    </aside>
+
+    <div class="chat-column">
+      <div class="notice-bar" id="history-disabled-banner" hidden>
+        Conversation history saving is currently disabled in Settings. Messages in this view will not be stored on disk.
+      </div>
+
+      <main class="chat" id="chat">
+        <section class="empty" id="empty">
+          <h2>Ask anything.</h2>
+          <p>The model runs on this computer. Nothing you type leaves it.</p>
+          <p class="empty-hint">Tip: Say <em>“Remember that I prefer concise Python examples”</em> to save a fact to local long-term memory.</p>
+        </section>
+        <ol class="transcript" id="transcript" aria-label="Conversation"></ol>
+      </main>
+
+      <footer class="composer-wrap">
+        <div class="activity-bar" id="activity-bar" hidden aria-live="polite">
+          <span class="activity-dot" aria-hidden="true"></span>
+          <span class="activity-text" id="activity-text">Thinking…</span>
+        </div>
+
+        <!-- Phase 5: Voice Error Banner -->
+        <div class="voice-bar voice-error-bar" id="voice-error-bar" hidden role="alert">
+          <span class="voice-error-text" id="voice-error-text"></span>
+          <button type="button" id="voice-error-dismiss-btn" class="btn btn-secondary btn-sm">Dismiss</button>
+        </div>
+
+        <!-- Phase 5: Active Recording & Waveform Bar -->
+        <div class="voice-bar voice-recording-bar" id="voice-recording-bar" hidden aria-live="polite">
+          <div class="voice-recording-left">
+            <span class="voice-rec-dot" aria-hidden="true"></span>
+            <span class="voice-rec-label" id="voice-recording-label">Recording microphone…</span>
+            <span class="voice-rec-timer" id="voice-recording-timer">00:00</span>
+          </div>
+          <div class="voice-waveform" id="voice-waveform" aria-label="Audio level indicator">
+            <span class="wave-bar"></span><span class="wave-bar"></span><span class="wave-bar"></span><span class="wave-bar"></span>
+            <span class="wave-bar"></span><span class="wave-bar"></span><span class="wave-bar"></span><span class="wave-bar"></span>
+            <span class="wave-bar"></span><span class="wave-bar"></span><span class="wave-bar"></span><span class="wave-bar"></span>
+          </div>
+          <div class="voice-recording-actions">
+            <button type="button" id="voice-stop-record-btn" class="btn btn-primary btn-sm">Finish &amp; Transcribe</button>
+            <button type="button" id="voice-cancel-record-btn" class="btn btn-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Phase 5: Transcript Preview & Edit Confirmation Bar -->
+        <div class="voice-bar voice-transcript-bar" id="voice-transcript-bar" hidden aria-live="polite">
+          <div class="voice-transcript-header">
+            <span class="voice-confirm-badge">Waiting for confirmation · Review &amp; edit recognized speech</span>
+            <span class="voice-confidence-badge" id="voice-confidence-badge" title="Uncalibrated Whisper log-probability heuristic"></span>
+          </div>
+          <div class="voice-transcript-row">
+            <label class="visually-hidden" for="voice-transcript-input">Recognized speech transcript</label>
+            <input type="text" id="voice-transcript-input" placeholder="Edit recognized transcript before sending…" maxlength="8000">
+            <button type="button" id="voice-submit-transcript-btn" class="btn btn-primary btn-sm">Send to Jarvis</button>
+            <button type="button" id="voice-discard-transcript-btn" class="btn btn-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Phase 5: Speaking Status Bar -->
+        <div class="voice-bar voice-speaking-bar" id="voice-speaking-bar" hidden aria-live="polite">
+          <div class="voice-speaking-left">
+            <span class="voice-speak-wave" aria-hidden="true">🔊</span>
+            <span id="voice-speaking-text">Speaking assistant response…</span>
+          </div>
+          <button type="button" id="voice-stop-speaking-btn" class="btn btn-danger btn-sm">Stop speaking</button>
+        </div>
+
+        <form class="composer" id="composer" autocomplete="off">
+          <label class="visually-hidden" for="prompt">Message</label>
+          <button type="button" id="mic-btn" class="btn btn-secondary mic-btn" title="Record local voice input" aria-label="Record local voice input">
+            <span aria-hidden="true">🎤</span> <span id="mic-btn-label">Voice</span>
+          </button>
+          <textarea id="prompt" rows="1" placeholder="Message Jarvis" maxlength="32000" required></textarea>
+          <button type="submit" id="send" class="btn btn-primary">Send</button>
+          <button type="button" id="stop" class="btn btn-secondary" hidden>Stop</button>
+        </form>
+        <div class="composer-meta">
+          <span>Enter to send, Shift+Enter for a new line</span>
+          <button type="button" id="new-chat" class="link-btn">New conversation</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Rename Conversation Modal -->
+  <dialog class="modal" id="rename-modal" aria-labelledby="rename-modal-title">
+    <form class="modal-card modal-card-sm" id="rename-form" method="dialog">
+      <header class="modal-header">
+        <h2 id="rename-modal-title">Rename conversation</h2>
+        <button type="button" class="icon-btn" data-close-modal="rename-modal" aria-label="Close">✕</button>
+      </header>
+      <div class="modal-body">
+        <label class="field-label" for="rename-input">Title</label>
+        <input type="text" id="rename-input" maxlength="200" required>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="rename-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save title</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Delete Conversation Confirmation Modal -->
+  <dialog class="modal" id="delete-modal" aria-labelledby="delete-modal-title">
+    <div class="modal-card modal-card-sm">
+      <header class="modal-header">
+        <h2 id="delete-modal-title">Delete conversation?</h2>
+        <button type="button" class="icon-btn" data-close-modal="delete-modal" aria-label="Close">✕</button>
+      </header>
+      <div class="modal-body">
+        <p id="delete-modal-desc">This permanently removes the conversation and its messages from local storage. Saved long-term memories will not be deleted.</p>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="delete-modal">Cancel</button>
+        <button type="button" id="confirm-delete-btn" class="btn btn-danger">Delete conversation</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Long-Term Memory Management Modal -->
+  <dialog class="modal" id="memories-modal" aria-labelledby="memories-modal-title">
+    <div class="modal-card">
+      <header class="modal-header">
+        <div>
+          <h2 id="memories-modal-title">Long-term memory</h2>
+          <p class="modal-sub">Explicit facts stored locally on this computer. Never inferred without your consent.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="memories-modal" aria-label="Close">✕</button>
+      </header>
+
+      <div class="modal-body">
+        <div class="memory-toolbar">
+          <label class="toggle-row">
+            <input type="checkbox" id="memory-enabled-toggle" checked>
+            <span>Enable memory retrieval during chat</span>
+          </label>
+          <div class="memory-filters">
+            <label class="visually-hidden" for="memory-search-input">Search memories</label>
+            <input type="search" id="memory-search-input" placeholder="Search saved memories…" maxlength="200">
+            <label class="visually-hidden" for="memory-category-filter">Filter category</label>
+            <select id="memory-category-filter">
+              <option value="">All categories</option>
+              <option value="general">general</option>
+              <option value="preference">preference</option>
+              <option value="project">project</option>
+              <option value="work">work</option>
+              <option value="personal">personal</option>
+              <option value="fact">fact</option>
+            </select>
+          </div>
+        </div>
+
+        <form class="memory-form" id="memory-form" autocomplete="off">
+          <input type="hidden" id="memory-edit-id" value="">
+          <div class="memory-form-row">
+            <label class="visually-hidden" for="memory-content-input">Memory fact</label>
+            <input type="text" id="memory-content-input" placeholder="Add a fact to remember (e.g. I prefer Python 3.12 and pytest)…" maxlength="2000" required>
+            <label class="visually-hidden" for="memory-category-input">Category</label>
+            <select id="memory-category-input">
+              <option value="general">general</option>
+              <option value="preference">preference</option>
+              <option value="project">project</option>
+              <option value="work">work</option>
+              <option value="personal">personal</option>
+              <option value="fact">fact</option>
+            </select>
+            <label class="visually-hidden" for="memory-importance-input">Importance</label>
+            <select id="memory-importance-input" title="Importance (1-5)">
+              <option value="5">Importance 5 (Critical)</option>
+              <option value="4">Importance 4 (High)</option>
+              <option value="3" selected>Importance 3 (Normal)</option>
+              <option value="2">Importance 2 (Low)</option>
+              <option value="1">Importance 1 (Minimal)</option>
+            </select>
+            <button type="submit" id="memory-submit-btn" class="btn btn-primary btn-sm">Save memory</button>
+            <button type="button" id="memory-cancel-edit-btn" class="btn btn-secondary btn-sm" hidden>Cancel</button>
+          </div>
+          <p class="form-error" id="memory-form-error" hidden></p>
+        </form>
+
+        <ol class="memory-list" id="memories-list" aria-label="Saved memories"></ol>
+        <p class="empty-list" id="memories-empty" hidden>No memories saved yet.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Settings Modal -->
+  <dialog class="modal" id="settings-modal" aria-labelledby="settings-modal-title">
+    <form class="modal-card" id="settings-form" autocomplete="off">
+      <header class="modal-header">
+        <div>
+          <h2 id="settings-modal-title">Settings</h2>
+          <p class="modal-sub">Saved locally in SQLite. Model &amp; GPU changes require explicit confirmation before reloading.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="settings-modal" aria-label="Close">✕</button>
+      </header>
+
+      <div class="modal-body">
+        <div class="reload-banner" id="settings-reload-banner" hidden>
+          <div>
+            <strong>Pending model reload:</strong>
+            <span id="settings-reload-fields-text"></span>
+          </div>
+          <button type="button" id="reload-model-now-btn" class="btn btn-primary btn-sm">Confirm &amp; reload model now</button>
+        </div>
+
+        <div class="runtime-summary" id="runtime-summary"></div>
+
+        <fieldset class="settings-group">
+          <legend>Application &amp; Privacy</legend>
+          <div class="settings-grid">
+            <div class="field">
+              <label class="field-label" for="set-theme">Theme</label>
+              <select id="set-theme">
+                <option value="dark">Dark Slate (Default)</option>
+                <option value="midnight">Midnight Obsidian</option>
+                <option value="light">Light Paper</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-new-conv-behavior">On startup</label>
+              <select id="set-new-conv-behavior">
+                <option value="resume_last">Resume most recent conversation</option>
+                <option value="start_fresh">Start a fresh empty conversation</option>
+              </select>
+            </div>
+          </div>
+          <div class="toggles-stack">
+            <label class="toggle-row">
+              <input type="checkbox" id="set-stream-responses">
+              <span>Stream token responses as they generate</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-history-enabled">
+              <span>Persist conversation history to local SQLite database</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-memory-enabled">
+              <span>Enable explicit long-term memory retrieval</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-tools-enabled" checked>
+              <span>Enable structured tool calling (calculator, time, workspace, system info)</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-offline-mode" checked>
+              <span>Offline Mode (block all external web search and web page fetch requests)</span>
+            </label>
+          </div>
+          <div class="settings-grid">
+            <div class="field">
+              <label class="field-label" for="set-max-tool-calls">Max tool calls per turn (1 – 8)</label>
+              <input type="number" id="set-max-tool-calls" min="1" max="8" step="1" value="3" required>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend>Generation Parameters (Applied Immediately)</legend>
+          <div class="settings-grid">
+            <div class="field">
+              <label class="field-label" for="set-temperature">Temperature (0.0 – 2.0)</label>
+              <input type="number" id="set-temperature" min="0" max="2" step="0.05" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-top-p">Top-p (0.05 – 1.0)</label>
+              <input type="number" id="set-top-p" min="0.05" max="1" step="0.05" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-max-tokens">Max output tokens</label>
+              <input type="number" id="set-max-tokens" min="1" max="8192" step="1" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-repeat-penalty">Repeat penalty (0.5 – 2.5)</label>
+              <input type="number" id="set-repeat-penalty" min="0.5" max="2.5" step="0.05" required>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="set-system-prompt">System prompt</label>
+            <textarea id="set-system-prompt" rows="2" maxlength="8000" required></textarea>
+          </div>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend>Local Voice, Audio Devices &amp; Wake-Word (Phase 5)</legend>
+          <div class="toggles-stack">
+            <label class="toggle-row">
+              <input type="checkbox" id="set-voice-input-enabled" checked>
+              <span>Enable local microphone speech-to-text (Faster-Whisper on CPU)</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-voice-output-enabled">
+              <span>Automatically speak assistant responses aloud (Piper TTS on CPU)</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-auto-submit-transcript">
+              <span>Auto-submit recognized speech without waiting for manual transcript confirmation</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-stop-speaking-on-input" checked>
+              <span>Immediately stop spoken output when new user input or recording starts</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="set-wake-word-enabled">
+              <span>Enable local “Hey Jarvis” wake-word activation (OpenWakeWord on CPU)</span>
+            </label>
+          </div>
+          <p class="field-hint voice-privacy-note" id="voice-privacy-note">
+            Privacy notice: Wake-word detection monitors the selected microphone locally in RAM to detect “Hey Jarvis”. It never records audio to disk or transmits audio externally, and automatically resets to OFF whenever Jarvis restarts.
+          </p>
+          <div class="settings-grid">
+            <div class="field">
+              <label class="field-label" for="set-selected-microphone">Microphone input device</label>
+              <select id="set-selected-microphone">
+                <option value="default">System Default Microphone</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-selected-speaker">Speaker / output device</label>
+              <select id="set-selected-speaker">
+                <option value="default">System Default Speaker</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-selected-tts-voice">Local TTS voice model</label>
+              <select id="set-selected-tts-voice">
+                <option value="en_GB-alan-medium">en_GB-alan-medium (Local Piper ONNX)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-listening-duration">Recording duration (1.0 – 60.0 s)</label>
+              <input type="number" id="set-listening-duration" min="1" max="60" step="0.5" value="8.0" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-speech-speed">Speech speed (0.5 – 2.0)</label>
+              <input type="number" id="set-speech-speed" min="0.5" max="2.0" step="0.05" value="1.0" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-speech-volume">Speech volume (0.0 – 2.0)</label>
+              <input type="number" id="set-speech-volume" min="0.0" max="2.0" step="0.05" value="1.0" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-wake-word-sensitivity">Wake-word sensitivity (0.05 – 0.99)</label>
+              <input type="number" id="set-wake-word-sensitivity" min="0.05" max="0.99" step="0.05" value="0.5" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-wake-word-timeout">Wake-word inactivity timeout (1 – 120 s)</label>
+              <input type="number" id="set-wake-word-timeout" min="1" max="120" step="1" value="10" required>
+            </div>
+          </div>
+          <div class="inline-actions">
+            <button type="button" id="refresh-audio-devices-btn" class="btn btn-secondary btn-sm">Refresh audio devices</button>
+            <button type="button" id="test-tts-voice-btn" class="btn btn-secondary btn-sm">Test speaker voice</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend>Model &amp; Hardware (Requires Confirmation to Reload)</legend>
+          <div class="field">
+            <label class="field-label" for="set-model-path">GGUF model file path</label>
+            <input type="text" id="set-model-path" required>
+          </div>
+          <div class="settings-grid">
+            <div class="field">
+              <label class="field-label" for="set-n-gpu-layers">GPU layers ("auto", -1 all, 0 CPU, or count)</label>
+              <input type="text" id="set-n-gpu-layers" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="set-n-ctx">Context window (n_ctx tokens)</label>
+              <input type="number" id="set-n-ctx" min="256" max="32768" step="256" required>
+            </div>
+          </div>
+          <p class="field-hint">Safe RTX 5050 CUDA configuration preserved: <code>offload_kqv = false</code>.</p>
+        </fieldset>
+
+        <div class="reload-confirm-box" id="settings-confirm-box" hidden>
+          <p><strong>You modified model or hardware settings (<span id="confirm-fields-list"></span>).</strong> Choose how to apply them:</p>
+          <div class="confirm-actions">
+            <button type="button" id="save-without-reload-btn" class="btn btn-secondary btn-sm">Save for next restart (do not reload now)</button>
+            <button type="button" id="save-and-reload-btn" class="btn btn-primary btn-sm">Confirm &amp; reload model now</button>
+          </div>
+        </div>
+
+        <p class="form-error" id="settings-form-error" hidden></p>
+        <p class="form-ok" id="settings-form-ok" hidden></p>
+      </div>
+
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="settings-modal">Close</button>
+        <button type="submit" id="settings-save-btn" class="btn btn-primary">Save settings</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Tools, Workspace Files & Approvals Modal (Phase 3) -->
+  <dialog class="modal" id="tools-modal" aria-labelledby="tools-modal-title">
+    <div class="modal-card">
+      <header class="modal-header">
+        <div>
+          <h2 id="tools-modal-title">Tools, Workspace &amp; Activity</h2>
+          <p class="modal-sub">Central Tool Registry, sandboxed <code>workspace/</code> files, and execution audit log.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="tools-modal" aria-label="Close">✕</button>
+      </header>
+
+      <div class="modal-body">
+        <div class="tools-status-bar">
+          <span id="tools-modal-mode-status">Mode: Offline (Local tools only)</span>
+          <button type="button" id="refresh-tools-btn" class="btn btn-secondary btn-sm">Refresh</button>
+        </div>
+
+        <section class="tools-section" id="pending-approvals-section" hidden>
+          <h3 class="tools-section-title">Pending User Approvals</h3>
+          <div id="modal-approvals-list" class="approvals-stack"></div>
+        </section>
+
+        <section class="tools-section">
+          <h3 class="tools-section-title">Workspace Files (<code>workspace/</code>)</h3>
+          <ol class="workspace-file-list" id="workspace-files-list" aria-label="Workspace files"></ol>
+          <p class="empty-list" id="workspace-files-empty" hidden>No files in workspace/.</p>
+        </section>
+
+        <section class="tools-section">
+          <h3 class="tools-section-title">Recent Tool Executions</h3>
+          <ol class="tool-exec-list" id="tool-executions-list" aria-label="Recent tool executions"></ol>
+          <p class="empty-list" id="tool-executions-empty" hidden>No tool executions recorded yet.</p>
+        </section>
+
+        <section class="tools-section">
+          <h3 class="tools-section-title">Registered Tool Catalog</h3>
+          <ol class="tool-catalog-list" id="tool-catalog-list" aria-label="Registered tools"></ol>
+        </section>
+      </div>
+
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="tools-modal">Close</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Tasks, Scheduler & Reminders Modal (Phase 4) -->
+  <dialog class="modal" id="tasks-modal" aria-labelledby="tasks-modal-title">
+    <div class="modal-card modal-card-lg">
+      <header class="modal-header">
+        <div>
+          <h2 id="tasks-modal-title">Tasks, Scheduling &amp; Reminders</h2>
+          <p class="modal-sub">Persistent SQLite task engine, timezone-aware reminders, and bounded local/research execution.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="tasks-modal" aria-label="Close">✕</button>
+      </header>
+
+      <div class="modal-body">
+        <div class="tools-status-bar">
+          <span id="tasks-timezone-label">Timezone: Local</span>
+          <div class="inline-actions">
+            <button type="button" id="tick-scheduler-btn" class="btn btn-secondary btn-sm">Check due tasks now</button>
+            <button type="button" id="refresh-tasks-btn" class="btn btn-secondary btn-sm">Refresh</button>
+          </div>
+        </div>
+
+        <form class="task-create-form" id="task-create-form" autocomplete="off">
+          <h3 class="tools-section-title">Create Task or Reminder</h3>
+          <div class="task-form-grid">
+            <div class="field">
+              <label class="field-label" for="task-title-input">Title</label>
+              <input type="text" id="task-title-input" placeholder="e.g. Study DSA at 7 PM or Summarize workspace notes" maxlength="300" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="task-type-input">Task Category</label>
+              <select id="task-type-input">
+                <option value="reminder">Reminder (no model inference)</option>
+                <option value="local_task">Local Processing Task (Phase 3 tool)</option>
+                <option value="research_task">Web Research Task (requires Online Mode)</option>
+                <option value="followup">Follow-up Reminder</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="task-scheduled-input">Scheduled Time (ISO or local)</label>
+              <input type="datetime-local" id="task-scheduled-input">
+            </div>
+            <div class="field">
+              <label class="field-label" for="task-recurrence-input">Recurrence</label>
+              <select id="task-recurrence-input">
+                <option value="none">One-time</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="task-priority-input">Priority</label>
+              <select id="task-priority-input">
+                <option value="5">5 — Critical</option>
+                <option value="4">4 — High</option>
+                <option value="3" selected>3 — Normal</option>
+                <option value="2">2 — Low</option>
+                <option value="1">1 — Minimal</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="task-desc-input">Description / Notes</label>
+              <input type="text" id="task-desc-input" placeholder="Optional details…" maxlength="500">
+            </div>
+          </div>
+
+          <div class="task-tool-config" id="task-tool-config" hidden>
+            <div class="task-form-grid">
+              <div class="field">
+                <label class="field-label" for="task-tool-name-input">Approved Tool</label>
+                <select id="task-tool-name-input">
+                  <option value="calculate">calculate (Level 1 Safe Math)</option>
+                  <option value="workspace_list_files">workspace_list_files (Level 1 Read)</option>
+                  <option value="workspace_read_file">workspace_read_file (Level 1 Read)</option>
+                  <option value="get_system_info">get_system_info (Level 1 System)</option>
+                  <option value="workspace_create_file">workspace_create_file (Level 2 Approval Required)</option>
+                  <option value="workspace_write_file">workspace_write_file (Level 2 Approval Required)</option>
+                  <option value="fetch_webpage">fetch_webpage (Level 3 Online Required)</option>
+                  <option value="web_search">web_search (Level 3 Online Required)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="task-tool-args-input">Tool Arguments (JSON)</label>
+                <input type="text" id="task-tool-args-input" value='{"expression": "145 * 28"}' placeholder='{"expression": "2 + 2"}'>
+              </div>
+            </div>
+          </div>
+
+          <div class="task-form-actions">
+            <button type="submit" id="task-create-submit-btn" class="btn btn-primary btn-sm">Schedule task</button>
+            <p class="form-error" id="task-form-error" hidden></p>
+          </div>
+        </form>
+
+        <div class="task-filter-tabs" role="tablist" aria-label="Task state filters">
+          <button type="button" class="tab-btn active" data-task-filter="all" role="tab" aria-selected="true">All</button>
+          <button type="button" class="tab-btn" data-task-filter="pending" role="tab" aria-selected="false">Pending</button>
+          <button type="button" class="tab-btn" data-task-filter="scheduled" role="tab" aria-selected="false">Scheduled</button>
+          <button type="button" class="tab-btn" data-task-filter="running" role="tab" aria-selected="false">Running</button>
+          <button type="button" class="tab-btn" data-task-filter="completed" role="tab" aria-selected="false">Completed</button>
+          <button type="button" class="tab-btn" data-task-filter="failed" role="tab" aria-selected="false">Failed</button>
+          <button type="button" class="tab-btn" data-task-filter="paused" role="tab" aria-selected="false">Paused / Blocked</button>
+        </div>
+
+        <ol class="tasks-list" id="tasks-list" aria-label="Tasks list"></ol>
+        <p class="empty-list" id="tasks-empty" hidden>No tasks in this view.</p>
+      </div>
+
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="tasks-modal">Close</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Cancel Task Confirmation Modal (Phase 4) -->
+  <dialog class="modal" id="cancel-task-modal" aria-labelledby="cancel-task-modal-title">
+    <div class="modal-card modal-card-sm">
+      <header class="modal-header">
+        <h2 id="cancel-task-modal-title">Cancel task?</h2>
+        <button type="button" class="icon-btn" data-close-modal="cancel-task-modal" aria-label="Close">✕</button>
+      </header>
+      <div class="modal-body">
+        <p id="cancel-task-modal-desc">Are you sure you want to cancel this task? Once cancelled, it will not run again.</p>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="cancel-task-modal">Keep task</button>
+        <button type="button" id="confirm-cancel-task-btn" class="btn btn-danger">Confirm cancel</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- Persistent Notifications Panel Modal (Phase 4) -->
+  <dialog class="modal" id="notifications-modal" aria-labelledby="notifications-modal-title">
+    <div class="modal-card">
+      <header class="modal-header">
+        <div>
+          <h2 id="notifications-modal-title">Notifications &amp; Reminders</h2>
+          <p class="modal-sub">Persistent local notifications for due reminders, task completions, approvals, and offline blocks.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="notifications-modal" aria-label="Close">✕</button>
+      </header>
+
+      <div class="modal-body">
+        <div class="tools-status-bar">
+          <label class="toggle-row">
+            <input type="checkbox" id="notifications-unread-only">
+            <span>Show unread only</span>
+          </label>
+          <div class="inline-actions">
+            <button type="button" id="mark-all-notifications-read-btn" class="btn btn-secondary btn-sm">Mark all read</button>
+            <button type="button" id="refresh-notifications-btn" class="btn btn-secondary btn-sm">Refresh</button>
+          </div>
+        </div>
+
+        <ol class="notifications-list" id="notifications-list" aria-label="Notifications"></ol>
+        <p class="empty-list" id="notifications-empty" hidden>No notifications.</p>
+      </div>
+
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="notifications-modal">Close</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

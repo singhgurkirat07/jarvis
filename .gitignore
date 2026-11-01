@@ -1,0 +1,74 @@
+# Model weights and binary artifacts (NEVER commit)
+*.gguf
+*.ggml
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.onnx
+models/*.gguf
+
+# Secrets and local environment configuration
+.env
+.env.*
+*.pem
+*.key
+*secret*
+config/local*.json
+
+# Runtime databases
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.sqlite
+data/*.sqlite3
+data/benchmark_results.json
+
+# Logs
+logs/
+*.log
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Generated audio (voice recordings / synthesized speech)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.webm
+
+# Packaged executables and archives
+*.exe
+*.msi
+*.dll
+*.zip
+*.7z
+
+# Jarvis tool sandbox: files created at runtime by workspace tools (keep only the README)
+workspace/*
+!workspace/README.md
+
+# OS and editor temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.temp
+*.bak
+*.swp
+*~

@@ -1,0 +1,16 @@
+# Jarvis — Local AI Inference (Phase 1)
+# Verified runtime: Python 3.12.10 on Windows 11 (x64)
+
+fastapi==0.110.0
+uvicorn==0.29.0
+pydantic==2.7.1
+starlette==0.36.3
+llama_cpp_python==0.3.4
+nvidia-ml-py==13.610.43
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cuda-nvrtc-cu12==12.9.86
+nvidia-cuda-runtime-cu12==12.9.79
+psutil==7.2.2
+httpx==0.28.1
+pytest==9.1.1
+pytest-asyncio==1.4.0
